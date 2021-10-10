@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>Google Photo Album List</title>
+      <meta charset='utf-8' />
+    </head>
+
+    <body>
+      <h1>Upload Sample</h1>
+      <section>
+        <button id="login" onclick="login()" style="display: none;">ログイン</button>
+        <button id="logout" onclick="logout()" style="display: none;">ログアウト</button>
+      </section>
+
+      <section>
+				<div id="file" style="margin-top: 20px; display: none;">
+					<!--
+					<input id="file-input" type="file" onchange="upload(this.files[0])" />
+					-->
+					<button onclick="list()">list</button>
+        </div>
+			</section>
+
+			<img id="image" />
+
+      <pre id="result">
+			</pre>
+
+      <script async defer src="https://apis.google.com/js/api.js" onload="this.onload=function(){};handleClientLoad()" onreadystatechange="if (this.readyState === 'complete') this.onload()">
+      </script>
+      <script>
+    const apiKey = 'AIzaSyB7JZ1Nkt1DznJBlJI1K2bSbdLLYHItDsg';
+    const clientId = '934383163806-ridq1v97isuvd3advv8esehchi9878oi.apps.googleusercontent.com';
+    const discoveryDocs = [];
+    const scopes = 'https://www.googleapis.com/auth/photoslibrary.readonly';
+
+    // Google API Client Library for JavaScript ロード時のイベント
+    function handleClientLoad() {
+      gapi.load('client:auth2', () => {
+        gapi.client.init({
+          apiKey: apiKey,
+          discoveryDocs: discoveryDocs,
+          clientId: clientId,
+          scope: scopes
+        }).then(function () {
+          // サインイン状態を監視し、状態に変化があったときに「updateSigninStatus」を呼ぶ
+          gapi.auth2.getAuthInstance().isSignedIn.listen(updateSigninStatus);
+          // 初期起動時のサインイン状態で画面制御
+          updateSigninStatus(gapi.auth2.getAuthInstance().isSignedIn.get());
+        });
+      });
+    }
+
+    // ログイン
+    function login() {
+      gapi.auth2.getAuthInstance().signIn();
+    }
+
+    // ログアウト
+    function logout() {
+      gapi.auth2.getAuthInstance().signOut();
+      gapi.auth2.getAuthInstance().disconnect();
+    }
+
+    // ログイン・ログアウト状態に変更が発生した時に呼ばれる関数
+    function updateSigninStatus(isSignedIn) {
+      if (isSignedIn) {
+        //ログイン状態
+        document.getElementById("login").style.display = 'none';
+        document.getElementById("logout").style.display = 'block';
+				document.getElementById("file").style.display = 'block';
+				list();
+      } else {
+        //ログアウト
+        document.getElementById("login").style.display = 'block';
+        document.getElementById("logout").style.display = 'none';
+        document.getElementById("file").style.display = 'none';
+      }
+    }
+    
+    // 選択したファイルをGoogleフォトへアップルードする
+    function upload(file) {
+			var accessToken = gapi.auth.getToken().access_token; // OAuthアクセスキーを取得
+			
+      // Media Upload APIでファイルをアップロード
+      fetch('https://photoslibrary.googleapis.com/v1/uploads', {
+        method: 'POST',
+        headers: new Headers({ 
+          "Authorization": 'Bearer ' + accessToken,
+          "Content-type": "application/octet-stream",
+          "X-Goog-Upload-Content-Type": file.type,
+          "X-Goog-Upload-Protocol": "raw"
+        }),
+        body: file,
+      })
+      .then(res => res.text())
+      .then(token => {
+        // レスポンスのUploadTokenをパラメータにbatchCreateを呼ぶ
+        return batchCreate(token);
+			});
+    }
+
+    // Media Batch Create APIを呼び出し、Googleフォトへアップロードしたファイルを登録
+    function batchCreate(uploadToken) {
+      // gapiで、Media Batch Create API呼び出しリクエストの作成
+      var restRequest = gapi.client.request({
+        'path': 'https://photoslibrary.googleapis.com/v1/mediaItems:batchCreate',
+        'method': 'POST',
+        'body': {
+          'newMediaItems' : [
+            {
+              'description': "test batch create", // ファイルの概要
+              'simpleMediaItem': {
+                'uploadToken': uploadToken,  // Media Upload APIのレスポンスで取得したUploadTokenをセット
+                'fileName': 'test file name' // ファイル名
+              }
+            }
+          ]
+        }
+      });
+
+      // リクエストの実行
+      restRequest.execute((resp) => {
+        console.log(resp);
+      });
+		}
+		
+		function list() {
+			var accessToken = gapi.auth.getToken().access_token; // OAuthアクセスキーを取得
+			
+			fetch('https://photoslibrary.googleapis.com/v1/mediaItems:search', {
+        method: 'POST',
+        headers: new Headers({ 
+					"Authorization": `Bearer ${accessToken}`,
+					"Content-type": "application/json"
+				}),
+				body: `{
+					"albumId": "AOSldBDKocLo15GwRCF270J0FbyHYiSDsyq8LyGPAtQkrApSATvvPpXXEmqE2zlQeZbAHTHlomsL",
+					"pageSize": "100"
+				}`
+			})
+      .then(res => res.json())
+      .then(jsn => {
+				document.getElementById("result").textContent = JSON.stringify(jsn, null, "  ");
+				const mediaItem = jsn.mediaItems[0];
+				const meta = mediaItem.mediaMetadata;
+				document.getElementById("image").src = `${mediaItem.baseUrl}=w${meta.width}-h${meta.height}`;
+			})
+			/*
+			fetch('https://photoslibrary.googleapis.com/v1/albums/AOSldBDKocLo15GwRCF270J0FbyHYiSDsyq8LyGPAtQkrApSATvvPpXXEmqE2zlQeZbAHTHlomsL', {
+        method: 'GET',
+        headers: new Headers({ 
+					"Authorization": `Bearer ${accessToken}`
+				})
+			})
+      .then(res => res.json())
+      .then(jsn => {
+				console.log(jsn);
+				document.getElementById("result").textContent = JSON.stringify(jsn, null, "  ");
+			})
+			*/
+		}
+      </script>
+    </body>
+  </html>

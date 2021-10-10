@@ -1,0 +1,27 @@
+{
+  "name": "panoramaviewer",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "browser-sync start --server --port 4567 --ui-port 4568 --files='./*.html, ./js/*.js, ./style/*.css'",
+    "start:dev": "ruby -rwebrick -rwebrick/https -e 'WEBrick::HTTPServer.new(:DocumentRoot => \"./\", :Port => 9443, :SSLEnable => true, :SSLCertName => [[\"CN\", WEBrick::Utils::getservername]] ).start'",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/technohippy/panoramaviewer.git"
+  },
+  "author": "Yasushi Ando (andyjpn@gmail.com)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/technohippy/panoramaviewer/issues"
+  },
+  "homepage": "https://github.com/technohippy/panoramaviewer#readme",
+  "dependencies": {
+    "three": "^0.124.0"
+  },
+  "devDependencies": {
+    "browser-sync": "^2.26.13"
+  }
+}

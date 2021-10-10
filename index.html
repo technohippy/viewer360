@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>three.js vr - panorama</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+		<style>
+			#auth {
+				position:absolute;
+				top:0;
+				left:0;
+			}
+		</style>
+	</head>
+	<body>
+		<!--
+			https://www.sukerou.com/2020/10/javascirptgoogle.html
+			https://threejs.org/examples/#webgl_panorama_equirectangular
+			https://threejs.org/examples/#webxr_vr_panorama
+		-->
+		<section id="auth">
+			<button id="login" onclick="login()" style="display: none;">ログイン</button>
+			<button id="logout" onclick="logout()" style="display: none;">ログアウト</button>
+			<img id="texture" style="display: none;">
+		</section>
+
+		<script async defer src="https://apis.google.com/js/api.js" onload="this.onload=function(){};handleClientLoad()" onreadystatechange="if (this.readyState === 'complete') this.onload()">
+		</script>
+    <script>
+    const apiKey = 'AIzaSyB7JZ1Nkt1DznJBlJI1K2bSbdLLYHItDsg';
+    const clientId = '934383163806-ridq1v97isuvd3advv8esehchi9878oi.apps.googleusercontent.com';
+    const discoveryDocs = [];
+		const scopes = 'https://www.googleapis.com/auth/photoslibrary.readonly';
+
+    // Google API Client Library for JavaScript ロード時のイベント
+    function handleClientLoad() {
+      gapi.load('client:auth2', () => {
+        gapi.client.init({
+          apiKey: apiKey,
+          discoveryDocs: discoveryDocs,
+          clientId: clientId,
+          scope: scopes
+        }).then(function () {
+          // サインイン状態を監視し、状態に変化があったときに「updateSigninStatus」を呼ぶ
+          gapi.auth2.getAuthInstance().isSignedIn.listen(updateSigninStatus);
+          // 初期起動時のサインイン状態で画面制御
+          updateSigninStatus(gapi.auth2.getAuthInstance().isSignedIn.get());
+        });
+      });
+    }
+
+    // ログイン
+    function login() {
+      gapi.auth2.getAuthInstance().signIn();
+    }
+
+    // ログアウト
+    function logout() {
+      gapi.auth2.getAuthInstance().signOut();
+      gapi.auth2.getAuthInstance().disconnect();
+    }
+
+    // ログイン・ログアウト状態に変更が発生した時に呼ばれる関数
+    function updateSigninStatus(isSignedIn) {
+      if (isSignedIn) {
+        //ログイン状態
+        document.getElementById("login").style.display = 'none';
+        //document.getElementById("logout").style.display = 'block';
+				loadTextureInfo();
+      } else {
+        //ログアウト
+        document.getElementById("login").style.display = 'block';
+        document.getElementById("logout").style.display = 'none';
+      }
+		}
+
+		function loadTextureInfo() {
+			var accessToken = gapi.auth.getToken().access_token; // OAuthアクセスキーを取得
+			
+			fetch('https://photoslibrary.googleapis.com/v1/mediaItems:search', {
+        method: 'POST',
+        headers: new Headers({ 
+					"Authorization": `Bearer ${accessToken}`,
+					"Content-type": "application/json"
+				}),
+				body: `{
+					"albumId": "AOSldBDKocLo15GwRCF270J0FbyHYiSDsyq8LyGPAtQkrApSATvvPpXXEmqE2zlQeZbAHTHlomsL",
+					"pageSize": "100"
+				}`
+			})
+      .then(res => res.json())
+      .then(jsn => {
+				const mediaItem = jsn.mediaItems[0];
+				const meta = mediaItem.mediaMetadata;
+				const width = Math.floor(meta.width / 10);
+				const height = Math.floor(meta.height / 10);
+				window.texture360Url = `${mediaItem.baseUrl}=w${width}-h${height}`;
+				const img = document.getElementById("texture");
+				img.width = width;
+				img.height = height;
+				img.src = window.texture360Url;
+			})
+		}
+		</script>
+
+		<script type="module">
+
+			import * as THREE from './node_modules/three/build/three.module.js';
+			import { VRButton } from './node_modules/three/examples/jsm/webxr/VRButton.js';
+
+			let camera;
+			let renderer;
+			let scene;
+
+			(function loadTexture() {
+				if (window.texture360Url) {
+					console.log(window.texture360Url);
+					init(window.texture360Url);
+					animate();
+				} else {
+					setTimeout(loadTexture, 500);
+				}
+			})();
+
+			function init(textureUrl) {
+
+				renderer = new THREE.WebGLRenderer();
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				renderer.xr.enabled = true;
+				renderer.xr.setReferenceSpaceType( 'local' );
+				document.body.appendChild( renderer.domElement );
+
+				document.body.appendChild( VRButton.createButton( renderer ) );
+
+				//
+
+				scene = new THREE.Scene();
+
+				camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 1, 1000 );
+				camera.layers.enable( 1 );
+
+				/*
+				const geometry = new THREE.BoxBufferGeometry( 100, 100, 100 );
+				geometry.scale( 1, 1, - 1 );
+
+				//const textures = getTexturesFromAtlasFile( "textures/sun_temple_stripe_stereo.jpg", 12 );
+				const textures = getTexturesFromAtlasFile( textureUrl, 12 );
+
+				const materials = [];
+
+				for ( let i = 0; i < 6; i ++ ) {
+
+					materials.push( new THREE.MeshBasicMaterial( { map: textures[ i ] } ) );
+
+				}
+
+				const skyBox = new THREE.Mesh( geometry, materials );
+				skyBox.layers.set( 1 );
+				scene.add( skyBox );
+
+				const materialsR = [];
+
+				for ( let i = 6; i < 12; i ++ ) {
+
+					materialsR.push( new THREE.MeshBasicMaterial( { map: textures[ i ] } ) );
+
+				}
+
+				const skyBoxR = new THREE.Mesh( geometry, materialsR );
+				skyBoxR.layers.set( 2 );
+				scene.add( skyBoxR );
+				*/
+
+				const geometry = new THREE.SphereBufferGeometry( 500, 60, 40 );
+				// invert the geometry on the x-axis so that all of the faces point inward
+				geometry.scale( - 1, 1, 1 );
+
+
+
+
+
+				//const texture = new THREE.TextureLoader().load( textureUrl );
+
+				const imgElm = document.getElementById("texture");
+				imgElm.src = "textures/2294472375_24a3b8ef46_o.jpg";
+				const texture = new THREE.Texture( imgElm );
+
+
+
+
+				texture.format = THREE.RGBFormat
+				texture.needsUpdate = true;
+				const material = new THREE.MeshBasicMaterial( { map: texture } );
+
+				const mesh = new THREE.Mesh( geometry, material );
+
+				scene.add( mesh );
+
+
+
+				window.addEventListener( 'resize', onWindowResize, false );
+
+			}
+
+			function getTexturesFromAtlasFile( atlasImgUrl, tilesNum ) {
+
+				const textures = [];
+
+				for ( let i = 0; i < tilesNum; i ++ ) {
+
+					textures[ i ] = new THREE.Texture();
+
+				}
+
+				const loader = new THREE.ImageLoader();
+				loader.load( atlasImgUrl, function ( imageObj ) {
+
+					let canvas, context;
+					const tileWidth = imageObj.height;
+
+					for ( let i = 0; i < textures.length; i ++ ) {
+
+						canvas = document.createElement( 'canvas' );
+						context = canvas.getContext( '2d' );
+						canvas.height = tileWidth;
+						canvas.width = tileWidth;
+						context.drawImage( imageObj, tileWidth * i, 0, tileWidth, tileWidth, 0, 0, tileWidth, tileWidth );
+						textures[ i ].image = canvas;
+						textures[ i ].needsUpdate = true;
+
+					}
+
+				} );
+
+				return textures;
+
+			}
+
+			function onWindowResize() {
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+			}
+
+			function animate() {
+
+				renderer.setAnimationLoop( render );
+
+			}
+
+			function render() {
+
+				renderer.render( scene, camera );
+
+			}
+
+		</script>
+	</body>
+</html>
